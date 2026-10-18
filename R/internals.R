@@ -266,42 +266,93 @@
 }
 
 
+#' Fetch Understat data from its JSON endpoints
+#'
+#' Understat no longer embeds data in the page HTML; it is loaded from
+#' `getLeagueData`, `getTeamData`, `getMatchData` and `getPlayerData`.
+#'
+#' @param page_url understat.com league, team, match or player page URL
+#'
+#' @return the parsed JSON as a list, or `NA` on failure
+#'
+#' @importFrom magrittr %>%
+#' @importFrom httr GET add_headers set_cookies content
+#' @importFrom jsonlite fromJSON
+#' @noRd
+#'
+.understat_api <- function(page_url) {
+  path <- sub("^https?://understat\\.com/", "", page_url) %>% sub("[?#].*$", "", .) %>% sub("/$", "", .)
+  api_path <- if (grepl("^league/", path)) {
+    sub("^league/", "getLeagueData/", path)
+  } else if (grepl("^team/", path)) {
+    sub("^team/", "getTeamData/", path)
+  } else if (grepl("^match/", path)) {
+    sub("^match/", "getMatchData/", path)
+  } else if (grepl("^player/", path)) {
+    sub("^player/", "getPlayerData/", path)
+  } else {
+    return(NA)
+  }
+
+  tryCatch(
+    {
+      resp <- httr::GET(
+        paste0("https://understat.com/", api_path),
+        httr::add_headers(`X-Requested-With` = "XMLHttpRequest", Referer = page_url),
+        httr::set_cookies(.cookies = c("beget" = "begetok"))
+      )
+      httr::stop_for_status(resp)
+      resp %>% httr::content(as = "text", encoding = "UTF-8") %>% jsonlite::fromJSON(simplifyVector = FALSE)
+    },
+    error = function(e) NA
+  )
+}
+
+
 #' Clean Understat JSON data
 #'
 #' Returns a cleaned Understat data frame
 #'
 #' @param page_url understat.com page URL
-#' @param script_name html JSON script name
+#' @param script_name name of the data set, as it used to be named in the page's
+#'   script tags (`datesData`, `playersData`, `teamsData`, `shotsData`)
 #'
 #' @return a cleaned Understat data frame
 #'
 #' @importFrom magrittr %>%
-#' @importFrom httr GET set_cookies content
-#' @importFrom jsonlite fromJSON
+#' @importFrom jsonlite fromJSON toJSON
 #' @noRd
 #'
 .get_clean_understat_json <- function(page_url, script_name) {
-  page <- .get_understat_json(page_url)
+  api_data <- .understat_api(page_url)
 
   out_df <- data.frame()
-  if(!is.na(page)) {
-    # locate script tags
-    clean_json <- page %>% rvest::html_nodes("script") %>% as.character()
-    clean_json <- clean_json[grep(script_name, clean_json)] %>% stringi::stri_unescape_unicode()
-    clean_json <- qdapRegex::rm_square(clean_json, extract = TRUE, include.markers = TRUE) %>% unlist() %>% stringr::str_subset("\\[\\]", negate = TRUE)
+  if(is.list(api_data)) {
+    records <- switch(
+      script_name,
+      datesData = api_data[["dates"]],
+      playersData = api_data[["players"]],
+      teamsData = unname(api_data[["teams"]]),
+      shotsData = {
+        shots <- api_data[["shots"]]
+        # match pages split shots by side, player pages return a flat list
+        if (all(c("h", "a") %in% names(shots))) c(shots[["h"]], shots[["a"]]) else shots
+      },
+      NULL
+    )
 
-    out_df <- lapply(clean_json, jsonlite::fromJSON) %>% do.call("rbind", .)
-    # some outputs don't come with the season present, so add it in if not
-    if(!any(grepl("season", colnames(out_df)))) {
-      season_element <- page %>% rvest::html_nodes(xpath = '//*[@name="season"]') %>%
-        rvest::html_nodes("option")
-      season_element <- season_element[grep("selected", season_element)]
-      # season <- season_element %>% rvest::html_attr("value") %>% .[1] %>% as.numeric()
-      season <- season_element %>% rvest::html_text()
-      out_df <- cbind(season, out_df)
+    if(length(records) > 0) {
+      null_to_na <- function(x) if (is.null(x)) NA else if (is.list(x)) lapply(x, null_to_na) else x
+      out_df <- lapply(records, null_to_na) %>% jsonlite::toJSON(auto_unbox = TRUE) %>% jsonlite::fromJSON()
+      # some outputs don't come with the season present, so add it in if the URL has one
+      season_start <- stringr::str_match(page_url, "/(?:league|team)/[^/]+/(\\d{4})/?$")[, 2]
+      if(!any(grepl("season", colnames(out_df))) && !is.na(season_start)) {
+        season <- paste0(season_start, "/", as.integer(season_start) + 1)
+        out_df <- cbind(season, out_df)
+      }
+
+      out_df <- do.call(data.frame, out_df)
     }
-
-    out_df <- do.call(data.frame, out_df)
   }
 
   return(out_df)
@@ -357,17 +408,17 @@
 #' @noRd
 #'
 .tm_fix_dates <- function(dirty_dates) {
-  
+
   fix_date <- function(dirty_date) {
     if(is.na(dirty_date)) {
       clean_date <- NA_character_
     } else if (grepl("\\.", dirty_date)) {
-      
+
       first_part <- sub("\\..*", "", dirty_date)
-      
+
       # Count digits
       n <- nchar(first_part)
-      
+
       if (n == 4) {
         # Do something if 4 digits
         tryCatch({clean_date <- lubridate::ymd(dirty_date) %>% as.character()}, error = function(e) {clean_date <- NA_character_})
@@ -378,8 +429,8 @@
         # Fallback
         clean_date <- NA_character_
       }
-      
-      
+
+
     } else {
       split_string <- strsplit(dirty_date, split = " ") %>% unlist() %>% gsub(",", "", .)
       if(length(split_string) != 3) {
@@ -389,11 +440,11 @@
           as.character()}, error = function(e) {clean_date <- NA_character_})
       }
     }
-    
+
     return(clean_date)
   }
   clean_dates <- dirty_dates %>% purrr::map_chr(fix_date)
-  
+
   return(clean_dates)
 }
 
@@ -476,3 +527,45 @@
 
 
 
+
+
+#' Transfermarkt competition and season lookup
+#'
+#' Reads the competition/season lookup table and extends it to the current
+#' season. The table is no longer updated upstream, but every season URL is the
+#' competition URL plus `/plus/?saison_id=<season_start_year>`, so newer
+#' seasons can be derived from the competitions it already lists.
+#'
+#' @return a data frame with the columns of `main_comp_seasons.csv`
+#'
+#' @importFrom magrittr %>%
+#' @importFrom utils read.csv
+#' @noRd
+#'
+.tm_comp_seasons <- function() {
+  meta_df <- utils::read.csv(
+    url("https://raw.githubusercontent.com/JaseZiv/worldfootballR_data/master/raw-data/transfermarkt_leagues/main_comp_seasons.csv"),
+    stringsAsFactors = FALSE
+  )
+
+  today <- Sys.Date()
+  current_start_year <- as.integer(format(today, "%Y")) - as.integer(as.integer(format(today, "%m")) < 7)
+
+  # the most recent season that is fully populated (the table can have stray rows beyond it)
+  rows_per_season <- table(meta_df[["season_start_year"]])
+  base_year <- max(as.integer(names(rows_per_season)[rows_per_season >= 0.5 * max(rows_per_season)]))
+  missing_years <- seq_len(max(0, current_start_year - base_year)) + base_year
+  if (length(missing_years) == 0) return(meta_df)
+
+  comps <- meta_df[meta_df[["season_start_year"]] == base_year, ]
+  new_rows <- lapply(missing_years, function(yr) {
+    comps[["season_start_year"]] <- yr
+    comps[["season_urls"]] <- paste0(comps[["comp_url"]], "/plus/?saison_id=", yr)
+    comps
+  })
+  new_rows <- do.call(rbind, new_rows)
+
+  # keep the table's own rows where it already has them
+  existing <- paste(meta_df[["comp_url"]], meta_df[["season_start_year"]])
+  rbind(meta_df, new_rows[!paste(new_rows[["comp_url"]], new_rows[["season_start_year"]]) %in% existing, ])
+}

@@ -1,0 +1,2 @@
+# gitleaks ignore: known false positives that are not real secrets.
+# Each line is a path or path:finding-id. Review carefully before adding.

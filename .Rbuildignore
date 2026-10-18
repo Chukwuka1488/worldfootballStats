@@ -15,3 +15,8 @@ LICENSE
 ^CRAN-RELEASE$
 ^vignettes
 ^\.github$
+^\.pi$
+^\.claude$
+^dev-docs$
+^\.pre-commit-config\.yaml$
+^\.gitleaksignore$

@@ -1,0 +1,70 @@
+# Pre-commit hooks for worldfootballStats.
+#
+# Setup (one-time, per clone):
+#   pre-commit install --hook-type pre-commit --hook-type commit-msg
+#
+# What it catches:
+#   - gitleaks: scans staged files for secrets (API keys, tokens, passwords,
+#     private keys) before they enter git history.
+#   - basic hygiene: trailing whitespace, large files, merge conflict markers,
+#     private key files, YAML/JSON syntax validity.
+#   - R checks: every staged R file must parse, and no browser() or
+#     debug() calls may be committed.
+#   - commit-msg: rejects AI-attribution trailers.
+#
+# Run manually on all files:
+#   pre-commit run --all-files
+
+repos:
+  # Secret scanning. Needs Go on the machine (pre-commit builds gitleaks).
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+        name: detect secrets (gitleaks)
+
+  # Basic file hygiene. Generated output is excluded: docs/ is pkgdown
+  # output, man/ and NAMESPACE are written by roxygen2, README.md is
+  # rendered from README.Rmd.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^docs/|^man/|^README\.md$|^\.pi/skills/asd-ste100/
+      - id: end-of-file-fixer
+        exclude: ^docs/|^man/|^README\.md$|^\.pi/skills/asd-ste100/
+      - id: check-yaml
+        exclude: ^docs/
+      - id: check-json
+        exclude: ^docs/
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+        exclude: ^docs/
+      - id: detect-private-key
+        exclude: ^docs/
+
+  # R checks. Local hooks so no extra R package is needed beyond base R.
+  - repo: local
+    hooks:
+      - id: parsable-r
+        name: R files parse
+        language: system
+        files: \.(R|r)$
+        entry: Rscript -e 'for (f in commandArgs(TRUE)) parse(f)'
+      - id: no-r-debug-calls
+        name: no browser() or debug() in R code
+        language: system
+        files: ^R/.*\.R$
+        entry: bash -c 'if grep -nE "^[^#]*\b(browser|debug|debugonce)\(" "$@"; then echo "Remove debugging calls before committing."; exit 1; fi' --
+
+  # Reject AI-attribution trailers in commit messages (Co-Authored-By,
+  # Claude Code, claude.ai session links, etc.). Needs its own hook type:
+  # `pre-commit install --hook-type commit-msg`.
+  - repo: local
+    hooks:
+      - id: no-ai-attribution
+        name: reject AI attribution in commit message
+        language: system
+        stages: [commit-msg]
+        entry: bash -c 'if grep -iqE "co-authored|claude[[:space:]]code|generated with claude|claude\.ai" "$1"; then echo "[commit-msg] REJECTED - commit message contains AI attribution (Co-Authored-By / Claude Code / claude.ai). Remove it and commit again."; exit 1; fi' --

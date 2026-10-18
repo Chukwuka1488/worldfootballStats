@@ -19,8 +19,7 @@ tm_expiring_contracts <- function(country_name, contract_end_year, league_url = 
   main_url <- "https://www.transfermarkt.com"
 
   if(is.na(league_url)) {
-    meta_df <- read.csv(url("https://raw.githubusercontent.com/JaseZiv/worldfootballR_data/master/raw-data/transfermarkt_leagues/main_comp_seasons.csv"),
-                        stringsAsFactors = F)
+    meta_df <- .tm_comp_seasons()
 
     tryCatch({meta_df_seasons <- meta_df %>%
       dplyr::filter(.data[["country"]] %in% country_name)}, error = function(e) {meta_df_seasons <- data.frame()})
@@ -83,7 +82,7 @@ tm_expiring_contracts <- function(country_name, contract_end_year, league_url = 
                             error = function(e) player_name <- NA_character_)
     player_url <- tryCatch(exp_pg %>% rvest::html_nodes(".inline-table .hauptlink a") %>% rvest::html_attr("href") %>% paste0(main_url, .),
                            error = function(e) player_url <- NA_character_)
-    date_of_birth <- tryCatch(exp_pg %>% rvest::html_nodes("td.zentriert:nth-child(2)") %>% 
+    date_of_birth <- tryCatch(exp_pg %>% rvest::html_nodes("td.zentriert:nth-child(2)") %>%
                              rvest::html_text(), error = function(e) date_of_birth <- NA_character_)
     position <- tryCatch(exp_pg %>% rvest::html_nodes(".inline-table tr+ tr td") %>% rvest::html_text(),
                          error = function(e) position <- NA_character_)

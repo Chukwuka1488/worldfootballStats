@@ -28,8 +28,7 @@ tm_get_suspensions <- function(country_name = NA, league_url = NA) {
 
   if (is.na(league_url)) {
     tryCatch({
-      meta_df <- utils::read.csv(url("https://raw.githubusercontent.com/JaseZiv/worldfootballR_data/master/raw-data/transfermarkt_leagues/main_comp_seasons.csv"),
-                                 stringsAsFactors = FALSE)
+      meta_df <- .tm_comp_seasons()
       meta_filtered <- meta_df %>% dplyr::filter(.data[["country"]] == country_name)
 
       if (nrow(meta_filtered) == 0) {
@@ -164,8 +163,7 @@ tm_get_risk_of_suspension <- function(country_name, league_url = NA) {
 
   if(is.na(league_url)) {
     tryCatch({
-      meta_df <- utils::read.csv(url("https://raw.githubusercontent.com/JaseZiv/worldfootballR_data/master/raw-data/transfermarkt_leagues/main_comp_seasons.csv"),
-                                 stringsAsFactors = FALSE)
+      meta_df <- .tm_comp_seasons()
       meta_filtered <- meta_df %>% dplyr::filter(.data[["country"]] == country_name)
       comp_url <- meta_filtered$comp_url[1]
       comp_name <- meta_filtered$comp_name[1]
