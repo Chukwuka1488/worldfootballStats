@@ -2,6 +2,10 @@
 
 ### Improvements
 
+* Understat functions read data from Understat's JSON endpoints, because the site no longer embeds it in page HTML.
+* Transfermarkt functions that used the competition lookup table now work for seasons after 2024. The table is extended to the current season.
+* `.tm_fix_dates` now parses dates written as "30/06/2027". This fixes `contract_expiry` in `tm_expiring_contracts()` and other Transfermarkt date columns.
+* `tm_expiring_contracts()` returns an empty data frame, without an error, for a year with no expiring contracts.
 * Internal function `.tm_fix_dates` Now handles parsing even more date formats, including "30.08.2029" and "2029.08.30"  (0.6.8.0001) ([#445](https://github.com/JaseZiv/worldfootballR/issues/445))
 * Address issues with dates for `player_dob` in the output of `tm_player_market_values()` and `tm_each_team_player_market_val()` (0.6.8.0001)
 

@@ -56,6 +56,11 @@ tm_expiring_contracts <- function(country_name, contract_end_year, league_url = 
 
   expiring_page <- xml2::read_html(comp_url)
 
+  # Years with no expiring contracts (e.g. one that has already passed) have no results table
+  if(length(rvest::html_nodes(expiring_page, "#yw1 tbody")) == 0) {
+    return(data.frame())
+  }
+
   expiring_urls <- expiring_page %>% rvest::html_nodes(".tm-pagination__list-item a") %>% rvest::html_attr("href")
 
   if(length(expiring_urls)==0) {
