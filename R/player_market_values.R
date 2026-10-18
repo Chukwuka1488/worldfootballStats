@@ -1,6 +1,6 @@
-#' Get each team Transfermarkt player market values 
+#' Get each team Transfermarkt player market values
 #'
-#' Returns data frame of player valuations (in Euros) from transfermarkt.com 
+#' Returns data frame of player valuations (in Euros) from transfermarkt.com
 #' for an individual team
 #'
 #' @param each_team_url the url of the required team
@@ -15,29 +15,29 @@
 #'
 
 tm_each_team_player_market_val <- function(each_team_url, time_pause = 15) {
-  
+
   main_url <- "https://www.transfermarkt.com"
-  
+
   # there now appears to be an errorneous URL so will remove that manually:
   if(any(grepl("com#", each_team_url))) {
     each_team_url <- each_team_url[-grep(".com#", each_team_url)]
   }
-  
+
   each_team_url <- gsub("startseite", "kader", each_team_url) %>%
     paste0(., "/plus/1")
-  
+
   Sys.sleep(time_pause)
-  
+
   team_page <- xml2::read_html(each_team_url)
-  
+
   comp_name <- team_page |> rvest::html_elements(".data-header__club a") |> rvest::html_text() |> trimws()
   country <- team_page |> rvest::html_elements(".data-header__content a img") |> rvest::html_attr("title")
   season_start_year <- gsub(".*saison_id/", "", each_team_url) |> gsub("/plus/1", "", x=_) |> as.numeric()
-  
+
   team_data <- team_page %>% rvest::html_nodes("#yw1") %>% rvest::html_nodes(".items") %>% rvest::html_node("tbody")
-  
+
   tab_head_names <- team_page %>% rvest::html_nodes("#yw1") %>% rvest::html_nodes(".items") %>% rvest::html_nodes("th") %>% rvest::html_text()
-  
+
   # team name
   squad <- team_page %>% rvest::html_node(".data-header__headline-wrapper--oswald") %>% rvest::html_text() %>% stringr::str_squish()
   # numbers
@@ -140,28 +140,28 @@ tm_each_team_player_market_val <- function(each_team_url, time_pause = 15) {
   if(length(player_market_value) == 0) {
     player_market_value <- NA_character_
   }
-  
+
   suppressWarnings(team_df <- cbind(squad, player_num, player_name, player_url, player_position, player_birthday, player_nationality, current_club,
                                     player_height_mtrs, player_foot, date_joined, joined_from, contract_expiry, player_market_value) %>% data.frame())
-  
-  team_df <- team_df |> 
+
+  team_df <- team_df |>
     dplyr::mutate(comp_name = comp_name,
                   season_start_year = season_start_year,
-                  country = country) |> 
+                  country = country) |>
     dplyr::mutate(player_market_value_euro = mapply(.convert_value_to_numeric, player_market_value)) %>%
     dplyr::mutate(date_joined = .tm_fix_dates(.data[["date_joined"]]),
                   contract_expiry = .tm_fix_dates(.data[["contract_expiry"]])) %>%
-    tidyr::separate(., player_birthday, into = c("Month", "Day", "Year"), sep = "\\.", remove = F) %>% suppressWarnings() |> 
+    tidyr::separate(., player_birthday, into = c("Month", "Day", "Year"), sep = "\\.", remove = F) %>% suppressWarnings() |>
     dplyr::mutate(player_age = gsub(".*\\(", "", .data[["player_birthday"]]) %>% gsub("\\)", "", .),
                   player_birthday = gsub("\\s*\\([^)]*\\)", "", .data[["player_birthday"]]),
                   player_dob = suppressWarnings(lubridate::dmy(.data[["player_birthday"]]))) %>%
     dplyr::mutate(player_age = as.numeric(gsub("\\D", "", .data[["player_age"]]))) %>%
     dplyr::select(.data[["comp_name"]], .data[["country"]], .data[["season_start_year"]], .data[["squad"]], .data[["player_num"]], .data[["player_name"]], .data[["player_position"]], .data[["player_dob"]], .data[["player_age"]], .data[["player_nationality"]], .data[["current_club"]],
                   .data[["player_height_mtrs"]], .data[["player_foot"]], .data[["date_joined"]], .data[["joined_from"]], .data[["contract_expiry"]], .data[["player_market_value_euro"]], .data[["player_url"]])
-  
-  
+
+
   return(team_df)
-  
+
 }
 
 
@@ -191,8 +191,7 @@ tm_player_market_values <- function(country_name, start_year, league_url = NA) {
   main_url <- "https://www.transfermarkt.com"
 
   if(is.na(league_url)) {
-    meta_df <- read.csv(url("https://raw.githubusercontent.com/JaseZiv/worldfootballR_data/master/raw-data/transfermarkt_leagues/main_comp_seasons.csv"),
-                        stringsAsFactors = F)
+    meta_df <- .tm_comp_seasons()
 
     tryCatch({meta_df_seasons <- meta_df %>%
       dplyr::filter(.data[["country"]] %in% country_name, .data[["season_start_year"]] %in% start_year)}, error = function(e) {meta_df_seasons <- data.frame()})
@@ -433,8 +432,7 @@ get_player_market_values <- function(country_name, start_year, league_url = NA) 
   main_url <- "https://www.transfermarkt.com"
 
   if(is.na(league_url)) {
-    meta_df <- read.csv(url("https://raw.githubusercontent.com/JaseZiv/worldfootballR_data/master/raw-data/transfermarkt_leagues/main_comp_seasons.csv"),
-                        stringsAsFactors = F)
+    meta_df <- .tm_comp_seasons()
 
     tryCatch({meta_df_seasons <- meta_df %>%
       dplyr::filter(.data[["country"]] %in% country_name, .data[["season_start_year"]] %in% start_year)}, error = function(e) {meta_df_seasons <- data.frame()})

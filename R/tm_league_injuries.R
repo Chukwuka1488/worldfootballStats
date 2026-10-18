@@ -17,8 +17,7 @@ tm_league_injuries <- function(country_name, league_url = NA) {
   main_url <- "https://www.transfermarkt.com"
 
   if(is.na(league_url)) {
-    meta_df <- read.csv(url("https://raw.githubusercontent.com/JaseZiv/worldfootballR_data/master/raw-data/transfermarkt_leagues/main_comp_seasons.csv"),
-                        stringsAsFactors = F)
+    meta_df <- .tm_comp_seasons()
 
     tryCatch({meta_df_seasons <- meta_df %>%
       dplyr::filter(.data[["country"]] %in% country_name)}, error = function(e) {meta_df_seasons <- data.frame()})
