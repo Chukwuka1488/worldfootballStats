@@ -412,9 +412,9 @@
   fix_date <- function(dirty_date) {
     if(is.na(dirty_date)) {
       clean_date <- NA_character_
-    } else if (grepl("\\.", dirty_date)) {
-
-      first_part <- sub("\\..*", "", dirty_date)
+    } else if (grepl("[./]", dirty_date)) {
+      # Transfermarkt writes dates as dd.mm.yyyy, yyyy.mm.dd or dd/mm/yyyy
+      first_part <- sub("[./].*", "", dirty_date)
 
       # Count digits
       n <- nchar(first_part)
